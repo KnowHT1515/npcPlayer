@@ -1,0 +1,24 @@
+# Local build configuration
+local.props
+*.user
+*.suo
+
+# .NET and packaged build output
+bin/
+obj/
+build/
+build-*/
+Code/
+dist/
+
+# IDE and operating-system files
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Runtime logs and crash output
+log.txt
+LogHistory/
+CrashLogs/

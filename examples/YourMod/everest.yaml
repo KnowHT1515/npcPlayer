@@ -1,0 +1,7 @@
+- Name: YourMap
+  Version: 1.0.0
+  Dependencies:
+    - Name: Everest
+      Version: 1.0.0
+    - Name: npcPlayer
+      Version: 0.2.0

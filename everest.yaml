@@ -1,0 +1,7 @@
+- Name: npcPlayer
+  Version: 0.2.0
+  Author: KnowHT
+  DLL: Code/npcPlayer.dll
+  Dependencies:
+    - Name: Everest
+      Version: 1.6418.0

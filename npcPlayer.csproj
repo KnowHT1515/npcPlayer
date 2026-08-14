@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>npcPlayer</AssemblyName>
+    <RootNamespace>Celeste.Mod.NpcPlayer</RootNamespace>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <PathMap>$(MSBuildProjectDirectory)=/_/npcPlayer</PathMap>
+  </PropertyGroup>
+  <Import Project="local.props" Condition="Exists('local.props')" />
+  <PropertyGroup Condition="'$(CelesteDir)' == ''">
+    <CelesteDir>CHANGE_ME</CelesteDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Celeste">
+      <HintPath>$(CelesteDir)\Celeste.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MMHOOK_Celeste">
+      <HintPath>$(CelesteDir)\MMHOOK_Celeste.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="FNA">
+      <HintPath>$(CelesteDir)\FNA.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MonoMod.RuntimeDetour">
+      <HintPath>$(CelesteDir)\MonoMod.RuntimeDetour.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Mono.Cecil">
+      <HintPath>$(CelesteDir)\Mono.Cecil.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MonoMod.Utils">
+      <HintPath>$(CelesteDir)\MonoMod.Utils.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

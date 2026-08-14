@@ -1,0 +1,46 @@
+name: Bug report
+description: Report a reproducible npcPlayer problem
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for testing npcPlayer. Include a minimal map or TAS when possible, and remove personal information from logs and attachments.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment versions
+      description: Include npcPlayer, Celeste, and Everest versions.
+      placeholder: npcPlayer 0.2.0; Celeste 1.4.0.0; Everest 1.6418.0
+    validations:
+      required: true
+  - type: textarea
+    id: related-mods
+    attributes:
+      label: Related mods and versions
+      description: Include CelesteTAS, SkinModHelperPlus, mechanic mods, and multiplayer mods.
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include npcId, variant, TAS path, room, and exact actions.
+    validations:
+      required: true
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Logs and attachments
+      description: Drag in log.txt, video, screenshots, or a minimal test map.

@@ -1,0 +1,12 @@
+entities.npcPlayer/npcPlayerSpawnPoint.placements.name.spawn_point=npcPlayer (Spawn Point)
+entities.npcPlayer/npcPlayerSpawnPoint.attributes.npcId=NPC ID
+entities.npcPlayer/npcPlayerSpawnPoint.attributes.default=Default Respawn
+
+triggers.npcPlayer/activateNpcPlayer.placements.name.activate_npc_player=Activate npcPlayer
+triggers.npcPlayer/activateNpcPlayer.attributes.npcId=NPC ID
+triggers.npcPlayer/activateNpcPlayer.attributes.tas=TAS Path
+triggers.npcPlayer/activateNpcPlayer.attributes.once=Once
+triggers.npcPlayer/activateNpcPlayer.attributes.playerOnly=Player Only
+
+triggers.npcPlayer/changeNpcPlayerRespawn.placements.name.change_npc_player_respawn=Change npcPlayer Respawn
+triggers.npcPlayer/changeNpcPlayerRespawn.attributes.npcId=NPC ID
