@@ -27,19 +27,31 @@ public sealed class NpcPlayer : Player
     private readonly NpcTasRunner runner = new();
 
     public string NpcId { get; }
+    public bool LeadByPlayer { get; }
+    public bool LeadToPlayer { get; }
     internal NpcInputDevice InputDevice => input;
     internal HashSet<Trigger> NpcTriggersInside { get; } = new();
     internal List<NpcTriggerRouter.VanillaTriggerState> VanillaTriggerStates { get; } = new();
 
     public NpcPlayer(EntityData data, Vector2 offset)
-        : this(data.Position + offset, NormalizeNpcId(data.Attr("npcId", "npc")), PlayerSpriteMode.MadelineAsBadeline)
+        : this(
+            data.Position + offset,
+            NormalizeNpcId(data.Attr("npcId", "npc")),
+            PlayerSpriteMode.MadelineAsBadeline,
+            NpcDeathLink.Linked)
     {
     }
 
-    internal NpcPlayer(Vector2 position, string npcId, PlayerSpriteMode spriteMode)
+    internal NpcPlayer(
+        Vector2 position,
+        string npcId,
+        PlayerSpriteMode spriteMode,
+        NpcDeathLink deathLink)
         : base(position, spriteMode)
     {
         NpcId = NormalizeNpcId(npcId);
+        LeadByPlayer = deathLink.LeadByPlayer;
+        LeadToPlayer = deathLink.LeadToPlayer;
         if (spriteMode is PlayerSpriteMode.Madeline or PlayerSpriteMode.MadelineAsBadeline)
             ApplyBuiltInSpriteMode(spriteMode);
 

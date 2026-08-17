@@ -43,7 +43,7 @@ Trigger ID: `npcPlayer/changeNpcPlayerRespawn`
 
 The trigger filters Spawn Points by exact `npcId`, then selects the matching point nearest its Node. This persisted same-room selection takes priority over the initial `default` rule on the next reload. It does not teleport a living NPC.
 
-## Map-side variant config
+## Map-side NPC config
 
 Optional file in the map mod:
 
@@ -52,15 +52,25 @@ config/npcPlayer/npcPlayer.yaml
 ```
 
 ```yaml
-- npcPlayer:
-    npcId: "partner"
+npcPlayer:
+  - npcId: "partner"
     variant: "madeline"
-- npcPlayer:
-    npcId: "rival"
+    death_link:
+      lead_by_player: true
+      lead_to_player: false
+  - npcId: "rival"
     variant: "MySmhPlusSkinName"
 ```
 
-IDs are case-sensitive. Missing entries use `badeline`. Built-ins are `madeline` and `badeline`; other values are raw `SkinName` values from `SkinModHelperConfig.yaml`. Missing SMH+ skins log a warning and fall back to Badeline. Duplicate config IDs use the first valid entry.
+IDs are case-sensitive. Missing entries use `badeline`; `death_link` values default to `true`. `lead_by_player` controls the `Player -> NPC` death edge, while `lead_to_player` controls the `NPC -> Player` edge. NPC-to-NPC propagation only occurs through the real Player: an NPC that kills the Player can kill another NPC only when that second NPC has `lead_by_player: true`.
+
+Built-ins are `madeline` and `badeline`; other `variant` values are raw `SkinName` values from `SkinModHelperConfig.yaml`. Missing SMH+ skins log a warning and fall back to Badeline. Duplicate config IDs use the first valid entry. Missing or invalid death-link booleans individually fall back to `true` without discarding a valid variant. The v0.2.0 layout remains accepted and gives every legacy entry both default links:
+
+```yaml
+- npcPlayer:
+    npcId: "partner"
+    variant: "madeline"
+```
 
 SMH+ remains optional. Its compatibility contract is bound and validated once per npcPlayer module lifetime; if a future SMH+ release changes the private sprite metadata caches, npcPlayer logs one versioned warning and keeps the fully SMH+-managed sprite instead of producing a partially converted sprite.
 
@@ -88,10 +98,10 @@ TAS input is stored and executed as run-length encoded segments rather than expa
 
 ## Development hot reload
 
-For live TAS and variant-config editing, install the map mod as an unpacked directory such as `Celeste/Mods/YourMod/`. Everest watches unpacked mod files for additions, edits, renames, and deletions; ZIP contents are not live-watched.
+For live TAS and NPC-config editing, install the map mod as an unpacked directory such as `Celeste/Mods/YourMod/`. Everest watches unpacked mod files for additions, edits, renames, and deletions; ZIP contents are not live-watched.
 
 - Each successful `Activate npcPlayer` reads and parses the current TAS asset. A TAS already in progress keeps the snapshot with which it started; activate it again to run the edited file.
-- Editing `config/npcPlayer/npcPlayer.yaml` invalidates that map mod's cached variant config. The new variants are applied the next time the room loads, including a death/retry or leave and re-enter, without restarting Celeste. Existing runtime NPCs are not rebuilt in place because doing so would discard their movement, held object, and TAS state.
+- Editing `config/npcPlayer/npcPlayer.yaml` invalidates that map mod's cached NPC config. New variants and death links are applied the next time the room loads, including a death/retry or leave and re-enter, without restarting Celeste. Existing runtime NPCs are not rebuilt in place because doing so would discard their movement, held object, and TAS state.
 
 ## Runtime behavior
 
@@ -102,8 +112,9 @@ For live TAS and variant-config editing, install the map mod as an unpacked dire
 - PlayerCollider callbacks are filtered: vanilla hazards, springs, boosters, bumpers, feathers and refills work; collectibles, doors, story and progression objects ignore NPCs. Third-party entities must implement `INpcPlayerCollider` to opt in.
 - NPC updates cannot move the camera, change the global underwater music state, or produce controller rumble. PlayerDeadBody animation feedback runs later and is intentionally unaffected by this update-only suppression.
 - Freeze calls made synchronously during NPC update are discarded. Global freezes still pause the scene and TAS cursor.
-- Real Player death runs the original death animation and radial `DeathEffect` for every live npcPlayer instead of removing them immediately.
-- NPC death is registered through the real Player, so the room records and reloads exactly one real death. NPC death bodies are visual-only and cannot race the real body for the screen wipe or reload.
+- Real Player death runs the original death animation and radial `DeathEffect` only for live npcPlayers whose `lead_by_player` link is enabled.
+- An NPC whose `lead_to_player` link is enabled kills the real Player at end of frame. The Player then propagates death only to other NPCs whose `lead_by_player` link is enabled; NPCs never link directly to one another.
+- An NPC whose `lead_to_player` link is disabled dies independently and is not automatically respawned. NPC death bodies are visual-only and never own the screen wipe, reload, or real death statistics.
 - Respawn selection persists across same-room death/reload, then resets to the new room's initial Spawn Point selection on room change.
 - Same-room use only; NPC room transitions are not implemented.
 

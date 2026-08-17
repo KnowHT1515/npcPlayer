@@ -1,23 +1,24 @@
-- npcPlayer:
-    npcId: "madeline"
+npcPlayer:
+  - npcId: "madeline"
     variant: "madeline"
+    death_link:
+      lead_by_player: true
+      lead_to_player: true
 
-- npcPlayer:
-    npcId: "badeline"
+  - npcId: "badeline"
     variant: "badeline"
+    death_link:
+      lead_by_player: false
+      lead_to_player: false
 
-- npcPlayer:
-    npcId: "silvy"
+  - npcId: "silvy"
     variant: "Silvy_White"
 
-- npcPlayer:
-    npcId: "rucia"
+  - npcId: "rucia"
     variant: "Rucia_White"
 
-- npcPlayer:
-    npcId: "neuro"
+  - npcId: "neuro"
     variant: "Neuro_Sama"
 
-- npcPlayer:
-    npcId: "niko"
+  - npcId: "niko"
     variant: "Zaro_Niko"

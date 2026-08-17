@@ -20,12 +20,12 @@ public sealed class NpcPlayerModule : EverestModule
     public override void Load()
     {
         NpcPlayerHooks.Load();
-        Everest.Content.OnUpdate += NpcVariantConfig.OnContentUpdate;
+        Everest.Content.OnUpdate += NpcPlayerConfigLoader.OnContentUpdate;
     }
 
     public override void Unload()
     {
-        Everest.Content.OnUpdate -= NpcVariantConfig.OnContentUpdate;
+        Everest.Content.OnUpdate -= NpcPlayerConfigLoader.OnContentUpdate;
         NpcPlayerHooks.Unload();
         NpcPlayerRegistry.Clear();
     }
