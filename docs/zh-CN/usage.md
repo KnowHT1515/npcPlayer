@@ -1,4 +1,4 @@
-# npcPlayer 0.2.1 使用手册
+# npcPlayer 0.2.2 使用手册
 
 本文面向使用 Lönn 制作 Celeste 地图的作者，介绍如何在地图中生成由 TAS 输入驱动的 `Player` 型 NPC。
 
@@ -42,7 +42,7 @@ Celeste/Mods/
     - Name: Everest
       Version: 1.0.0
     - Name: npcPlayer
-      Version: 0.2.1
+      Version: 0.2.2
 ```
 
 只有使用 SkinModHelperPlus 自定义皮肤时，地图模组才需要额外声明对应依赖。使用内置 `madeline` 或 `badeline` 时不需要安装 SkinModHelperPlus。
@@ -127,7 +127,7 @@ npcPlayer/npcPlayerSpawnPoint
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `npcId` | 字符串 | `npc` | NPC 的逻辑身份，区分大小写 |
+| `npcId` | 字符串 | 空 | NPC 的逻辑身份，区分大小写 |
 | `default` | 布尔值 | `false` | 是否优先作为该 NPC 在本房间的初始出生点 |
 
 房间加载时，每个不同的 `npcId` 只生成一个运行时 NPC。同一个 `npcId` 可以对应多个出生点：
@@ -137,6 +137,8 @@ npcPlayer/npcPlayerSpawnPoint
 - 同一个 ID 有多个默认出生点不会报错，但只使用第一个。
 - 不同大小写视为不同 ID，例如 `Partner` 和 `partner` 是两个 NPC。
 - 空白 `npcId` 会被规范为 `npc`。
+
+在 Lönn 中，npcPlayer 的每个 `npcId` 字段都会从当前打开地图的所有 npcPlayer Entity 与 Trigger 收集 ID，并提供可搜索候选。候选只用于辅助编辑：字段仍允许输入新的 ID 或有意不匹配现有出生点的值。
 
 运行时 NPC 只属于当前房间。跨房间移动和跟随尚未实现；切换房间时，NPC 会根据新房间的出生点重新创建。
 
@@ -275,10 +277,12 @@ npcPlayer/activateNpcPlayer
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `npcId` | 字符串 | `npc` | 要控制的 NPC，区分大小写 |
-| `tas` | 字符串 | `Tas/Author/Map/action.tas` | 相对于地图模组根目录的 TAS 路径 |
+| `npcId` | 字符串 | 空 | 要控制的 NPC，区分大小写 |
+| `tas` | 字符串 | 空 | 相对于地图模组根目录的 TAS 路径 |
 | `once` | 布尔值 | `true` | 成功启动一次后是否停用 |
 | `playerOnly` | 布尔值 | `true` | 是否只允许真人激活 |
+
+对于名为 `MapName.bin` 的地图，Lönn 会在当前地图模组中扫描直接位于 `Tas/**/MapName/` 目录下的 TAS 文件。匹配的 `.tas` 文件会显示在可搜索列表中，同时仍允许输入任意路径。Windows 界面使用 `\` 方便阅读；选中的路径和手动输入的路径在写入地图数据前都会规范化为跨平台的 `/`。
 
 `once` 只在 TAS 成功找到并解析后才会消耗。NPC 不存在、地图来源无法识别、路径不安全或 TAS 解析失败时，Trigger 可以再次尝试，并会在日志中写明原因。
 
@@ -401,6 +405,11 @@ NPC 更新期间：
 - 不允许改变全局水下音乐状态。
 - 不产生手柄震动。
 - 同步发起的全局 Freeze 会被丢弃。
+- 可归属到该 NPC 的空间音效依据其与真人的直线距离调整：64 像素内保持完整音量，随后平滑衰减，在 320 像素处静音。
+
+附着在 NPC 上的循环 `SoundSource` 会随 NPC 移动持续更新增益。无位置信息的音乐、环境音、Snapshot、UI 音频以及真人自身音效均不受影响；无法找到真人时保持原始音量。
+
+单个 NPC 会保留自身正常的内部混音，即使它的多个合法事件有短暂重叠也不会启用群体限流。只有多个不同 npcPlayer 所有者同时可听时才分配预算：它们的距离增益共享 1.2 个满音量 NPC 的等效预算。播放同一事件路径的 NPC 所有者还会共享一个满音量事件预算，且只保留距真人最近的四个所有者可听。同一 NPC 在同一帧重复调用相同事件的 `Player.Play` 时，后续实例仍会作为重复声部静音。降低增益立即生效；竞争 NPC 结束后约用 80 ms 平滑恢复，避免音量突跳。
 
 游戏自身或真人发起的全局 Freeze 仍会暂停场景，NPC 的 TAS 游标也会一起暂停。死亡体稍后产生的死亡反馈不属于普通 NPC 更新隔离范围。
 
@@ -424,7 +433,7 @@ NPC 更新期间：
 
 检查：
 
-1. 地图模组是否依赖 `npcPlayer 0.2.1`。
+1. 地图模组是否依赖 `npcPlayer 0.2.2`。
 2. 是否放置了 `npcPlayer (Spawn Point)`。
 3. Lönn 中的实体 ID 是否仍为 `npcPlayer/npcPlayerSpawnPoint`。
 4. `log.txt` 是否出现重复 ID、皮肤配置或地图来源错误。

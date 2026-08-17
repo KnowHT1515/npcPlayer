@@ -1,4 +1,4 @@
-# npcPlayer 0.2.1 Usage Guide
+# npcPlayer 0.2.2 Usage Guide
 
 This guide is intended for Celeste map authors using Lönn. It explains how to create `Player`-type NPCs driven by TAS input files packaged with a map mod.
 
@@ -42,7 +42,7 @@ At minimum, the map mod's `everest.yaml` should contain:
     - Name: Everest
       Version: 1.0.0
     - Name: npcPlayer
-      Version: 0.2.1
+      Version: 0.2.2
 ```
 
 The map mod only needs an additional SkinModHelperPlus dependency when it uses a custom SMH+ skin. SkinModHelperPlus is not required for the built-in `madeline` or `badeline` appearances.
@@ -127,7 +127,7 @@ Fields:
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `npcId` | string | `npc` | Case-sensitive logical NPC identity |
+| `npcId` | string | empty | Case-sensitive logical NPC identity |
 | `default` | boolean | `false` | Whether this point is preferred as the NPC's initial spawn point in this room |
 
 Only one runtime NPC is created for each unique `npcId` when the room loads. One `npcId` can have multiple spawn points:
@@ -137,6 +137,8 @@ Only one runtime NPC is created for each unique `npcId` when the room loads. One
 - Multiple defaults for one ID are allowed, but only the first is used.
 - IDs with different capitalization are different NPCs; for example, `Partner` and `partner` do not match.
 - A blank `npcId` is normalized to `npc`.
+
+In Lönn, every npcPlayer `npcId` field provides a searchable list of IDs collected from all npcPlayer entities and triggers across the currently open map. The list is only an editing aid: the field remains editable and accepts new or intentionally unmatched values.
 
 Runtime NPCs belong only to the current room. Cross-room movement and following are not implemented; entering another room recreates NPCs from that room's spawn points.
 
@@ -275,10 +277,12 @@ Fields:
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `npcId` | string | `npc` | Case-sensitive target NPC ID |
-| `tas` | string | `Tas/Author/Map/action.tas` | TAS path relative to the map mod root |
+| `npcId` | string | empty | Case-sensitive target NPC ID |
+| `tas` | string | empty | TAS path relative to the map mod root |
 | `once` | boolean | `true` | Whether to disable the trigger after one successful activation |
 | `playerOnly` | boolean | `true` | Whether only the real Player may activate it |
+
+For a map named `MapName.bin`, Lönn scans the current map mod for TAS files directly inside directories matching `Tas/**/MapName/`. Matching `.tas` files appear in a searchable list, while arbitrary paths remain editable. Windows displays `\` separators for convenience; selected and manually entered paths are normalized to portable `/` separators before being stored in map data.
 
 `once` is consumed only after the TAS has been found and parsed successfully. If the NPC is missing, the source map mod cannot be identified, the path is unsafe, or parsing fails, the trigger can be tried again and the reason is written to the log.
 
@@ -401,6 +405,11 @@ While an NPC is updating:
 - It cannot change the global underwater music state.
 - It does not produce controller rumble.
 - Synchronous global Freeze requests are discarded.
+- Spatial sound effects attributed to the NPC use its straight-line distance from the real Player: full volume through 64 pixels, then smooth attenuation to silence at 320 pixels.
+
+Attached looping `SoundSource` components update this gain as the NPC moves. Positionless music, ambience, snapshots and UI audio are excluded, and the real Player's audio is never modified. If no real Player can be identified, npcPlayer leaves the original sound volume unchanged.
+
+One NPC keeps its normal internal sound mix, even when several of its legitimate events overlap. Crowd limiting begins only when multiple distinct npcPlayer owners are audible: their distance gains share a budget equivalent to 1.2 full-volume owners. Owners playing the same event path additionally share one full-volume event budget, and only the four closest owners for that event remain audible. A repeated `Player.Play` call with the same NPC and event path in one frame is still muted as a duplicate. Reductions apply immediately; gain recovers over roughly 80 ms when competing NPCs end, avoiding an abrupt volume jump.
 
 A global Freeze initiated by the game or the real Player still pauses the scene, including the NPC TAS cursor. Feedback created later by a `PlayerDeadBody` is outside ordinary NPC-update isolation.
 
@@ -424,7 +433,7 @@ For the technical preview, custom skins, simultaneous death of multiple NPCs, an
 
 Check that:
 
-1. The map mod depends on `npcPlayer 0.2.1`.
+1. The map mod depends on `npcPlayer 0.2.2`.
 2. The room contains `npcPlayer (Spawn Point)`.
 3. The Lönn entity ID is still `npcPlayer/npcPlayerSpawnPoint`.
 4. `log.txt` does not report a duplicate ID, appearance configuration problem, or map-source error.
