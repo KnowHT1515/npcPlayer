@@ -1,4 +1,4 @@
-# npcPlayer 0.2.0 Usage Guide
+# npcPlayer 0.2.1 Usage Guide
 
 This guide is intended for Celeste map authors using Lönn. It explains how to create `Player`-type NPCs driven by TAS input files packaged with a map mod.
 
@@ -42,7 +42,7 @@ At minimum, the map mod's `everest.yaml` should contain:
     - Name: Everest
       Version: 1.0.0
     - Name: npcPlayer
-      Version: 0.2.0
+      Version: 0.2.1
 ```
 
 The map mod only needs an additional SkinModHelperPlus dependency when it uses a custom SMH+ skin. SkinModHelperPlus is not required for the built-in `madeline` or `badeline` appearances.
@@ -140,9 +140,9 @@ Only one runtime NPC is created for each unique `npcId` when the room loads. One
 
 Runtime NPCs belong only to the current room. Cross-room movement and following are not implemented; entering another room recreates NPCs from that room's spawn points.
 
-## 6. Appearance Configuration
+## 6. NPC Configuration
 
-Appearance configuration is an optional file in the map mod:
+Appearance and death-link configuration use an optional file in the map mod:
 
 ```text
 config/npcPlayer/npcPlayer.yaml
@@ -151,28 +151,45 @@ config/npcPlayer/npcPlayer.yaml
 Example:
 
 ```yaml
-- npcPlayer:
-    npcId: "partner"
+npcPlayer:
+  - npcId: "partner"
     variant: "madeline"
-
-- npcPlayer:
-    npcId: "rival"
+    death_link:
+      lead_by_player: true
+      lead_to_player: false
+  - npcId: "rival"
     variant: "badeline"
-
-- npcPlayer:
-    npcId: "guide"
+    death_link:
+      lead_by_player: false
+      lead_to_player: false
+  - npcId: "guide"
     variant: "MySmhPlusSkinName"
 ```
+
+The two death links are independent directed edges centered on the real Player:
+
+- `lead_by_player` controls whether a real Player death causes this NPC to die.
+- `lead_to_player` controls whether this NPC's death causes the real Player to die.
+- NPCs never link directly to one another. If NPC A kills the Player, the Player propagates death only to NPCs whose own `lead_by_player` value is `true`.
 
 Rules:
 
 - `npcId` must exactly match the spawn point, including capitalization.
 - `madeline` and `badeline` are built-in npcPlayer appearance names and are case-insensitive.
 - Any other `variant` is looked up as a raw `SkinName` from SkinModHelperPlus's `SkinModHelperConfig.yaml`.
-- NPCs without an entry use Badeline by default.
+- NPCs without an entry use Badeline and both death links default to `true`.
+- Missing or invalid `death_link` values fall back to `true` per field without discarding a valid variant.
 - A missing custom `SkinName` produces a warning and falls back to Badeline.
 - If an `npcId` appears more than once, the first valid entry wins and later entries are ignored with a warning.
-- Invalid entries are skipped. If the entire file cannot be parsed, all NPCs from that map mod fall back to Badeline.
+- Invalid entries are skipped. If the entire file cannot be parsed, all NPCs from that map mod use the default appearance and death links.
+
+The v0.2.0 layout remains supported. Legacy entries receive `lead_by_player: true` and `lead_to_player: true`:
+
+```yaml
+- npcPlayer:
+    npcId: "partner"
+    variant: "madeline"
+```
 
 SkinModHelperPlus is optional. npcPlayer reads its skin information through a validated compatibility layer. If a future version changes the internal metadata contract, npcPlayer logs a versioned warning and preserves the fully SMH+-managed state instead of producing a partially applied skin.
 
@@ -313,12 +330,12 @@ Every successful entry into an `Activate npcPlayer` trigger reads and parses the
 - Activate the trigger again to run the edited file. If a `once=true` trigger has already succeeded in this room, reload the room first; use `once=false` temporarily during frequent iteration.
 - Deleting or breaking a TAS does not affect the old snapshot already playing, but the next activation fails and writes an error to the log.
 
-### Appearance Configuration Hot Reload
+### NPC Configuration Hot Reload
 
 Editing `config/npcPlayer/npcPlayer.yaml` invalidates the map mod's cached configuration:
 
 - A full Celeste restart is not required.
-- Existing NPCs do not change appearance in place.
+- Existing NPCs do not change appearance or death links in place.
 - The new configuration is applied on the next room load, death retry, or leave and re-entry.
 - NPCs are not rebuilt in place because doing so would discard their current position, held object, and TAS state.
 
@@ -389,13 +406,15 @@ A global Freeze initiated by the game or the real Player still pauses the scene,
 
 ## 13. Death and Reload
 
-The intended model is for the real Player and all NPCs to participate in one room-failure flow:
+Death propagation is a directed star centered on the real Player:
 
-- When the real Player dies, every living NPC enters its death flow.
-- When an NPC dies unexpectedly, it forces the real Player to die.
-- Exactly one real death is recorded in statistics.
-- Only the real Player's death body owns the final screen wipe and room reload, preventing multiple bodies from racing `Level.Reload()`.
-- NPC death bodies are visual companions and do not reload the room independently.
+- A real Player death kills each living NPC whose `lead_by_player` value is `true`.
+- An NPC death kills the real Player only when that NPC's `lead_to_player` value is `true`.
+- When an NPC kills the Player, that Player death can then reach another NPC only through the second NPC's `lead_by_player` link. There are no direct NPC-to-NPC death links.
+- An NPC with `lead_to_player: false` dies independently and is not automatically respawned during the current room lifetime.
+- Only a real Player death records statistics and owns the final screen wipe and room reload. NPC death bodies finish their visual effect without reloading the room.
+
+If the real Player reloads the room, every NPC is recreated from room spawn-point data even when its `lead_by_player` link was disabled. The disabled link suppresses that NPC's death event and visual body; it does not preserve the runtime actor across a room reload.
 
 For the technical preview, custom skins, simultaneous death of multiple NPCs, and combinations with third-party death hooks should still receive focused testing. Include the skin name and `log.txt` when reporting unexpected visuals.
 
@@ -405,7 +424,7 @@ For the technical preview, custom skins, simultaneous death of multiple NPCs, an
 
 Check that:
 
-1. The map mod depends on `npcPlayer 0.2.0`.
+1. The map mod depends on `npcPlayer 0.2.1`.
 2. The room contains `npcPlayer (Spawn Point)`.
 3. The Lönn entity ID is still `npcPlayer/npcPlayerSpawnPoint`.
 4. `log.txt` does not report a duplicate ID, appearance configuration problem, or map-source error.
@@ -428,9 +447,9 @@ Check that:
 
 A TAS already in progress is not replaced in place. Enter a `once=false` trigger again or start it from another trigger. If the original `once=true` trigger has already succeeded, reload the room first. The map mod must be installed as an unpacked directory because ZIP contents are not hot-reloaded.
 
-### Editing the Appearance Configuration Has No Effect
+### Editing the NPC Configuration Has No Effect
 
-Appearance configuration is applied only when an NPC is created. Retry after death, re-enter the room, or reload it by another method before checking the result.
+Appearance and death-link configuration is applied only when an NPC is created. Retry after death, re-enter the room, or reload it by another method before checking the result.
 
 ### An NPC Does Not Activate a Third-Party Entity
 

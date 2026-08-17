@@ -1,4 +1,4 @@
-# npcPlayer 0.2.0 使用手册
+# npcPlayer 0.2.1 使用手册
 
 本文面向使用 Lönn 制作 Celeste 地图的作者，介绍如何在地图中生成由 TAS 输入驱动的 `Player` 型 NPC。
 
@@ -42,7 +42,7 @@ Celeste/Mods/
     - Name: Everest
       Version: 1.0.0
     - Name: npcPlayer
-      Version: 0.2.0
+      Version: 0.2.1
 ```
 
 只有使用 SkinModHelperPlus 自定义皮肤时，地图模组才需要额外声明对应依赖。使用内置 `madeline` 或 `badeline` 时不需要安装 SkinModHelperPlus。
@@ -140,9 +140,9 @@ npcPlayer/npcPlayerSpawnPoint
 
 运行时 NPC 只属于当前房间。跨房间移动和跟随尚未实现；切换房间时，NPC 会根据新房间的出生点重新创建。
 
-## 6. 外观配置
+## 6. NPC 配置
 
-外观配置是地图模组中的可选文件：
+外观与死亡连接使用地图模组中的可选配置文件：
 
 ```text
 config/npcPlayer/npcPlayer.yaml
@@ -151,28 +151,45 @@ config/npcPlayer/npcPlayer.yaml
 示例：
 
 ```yaml
-- npcPlayer:
-    npcId: "partner"
+npcPlayer:
+  - npcId: "partner"
     variant: "madeline"
-
-- npcPlayer:
-    npcId: "rival"
+    death_link:
+      lead_by_player: true
+      lead_to_player: false
+  - npcId: "rival"
     variant: "badeline"
-
-- npcPlayer:
-    npcId: "guide"
+    death_link:
+      lead_by_player: false
+      lead_to_player: false
+  - npcId: "guide"
     variant: "MySmhPlusSkinName"
 ```
+
+两条死亡连接是以真人 Player 为中心的独立有向边：
+
+- `lead_by_player` 决定真人死亡是否导致该 NPC 死亡。
+- `lead_to_player` 决定该 NPC 死亡是否导致真人死亡。
+- NPC 之间没有直接死亡连接。NPC A 杀死真人后，只会通过真人死亡继续影响自身 `lead_by_player` 为 `true` 的其他 NPC。
 
 规则：
 
 - `npcId` 必须与出生点完全一致，包括大小写。
 - `madeline` 和 `badeline` 是 npcPlayer 提供的内置外观名称，大小写不敏感。
 - 其他 `variant` 会作为 SkinModHelperPlus `SkinModHelperConfig.yaml` 中的原始 `SkinName` 查询。
-- 没有配置的 NPC 默认使用 Badeline。
+- 没有配置的 NPC 默认使用 Badeline，两条死亡连接均默认为 `true`。
+- `death_link` 或其中某个布尔值缺失、非法时，受影响的字段独立回退为 `true`，不会丢弃合法的 `variant`。
 - 找不到自定义 `SkinName` 时会记录警告并回退到 Badeline。
 - 同一 `npcId` 重复配置时，第一条有效配置生效，其余条目被忽略并记录警告。
-- 格式错误的条目会被跳过；整个文件无法解析时，本模组中的 NPC 都回退到 Badeline。
+- 格式错误的条目会被跳过；整个文件无法解析时，本模组中的 NPC 都使用默认外观和死亡连接。
+
+继续兼容 v0.2.0 格式；旧格式条目的两条死亡连接均视为 `true`：
+
+```yaml
+- npcPlayer:
+    npcId: "partner"
+    variant: "madeline"
+```
 
 SkinModHelperPlus 是可选依赖。npcPlayer 通过经过验证的兼容层读取其皮肤信息；若未来版本改变内部元数据结构，npcPlayer 会记录带版本号的警告，并保留完整的 SMH+ 管理状态，避免产生半应用皮肤。
 
@@ -313,12 +330,12 @@ Everest 不会实时监视 ZIP 内的文件，所以压缩地图包不适合热�
 - 要运行修改后的内容，应再次激活该 Trigger。若 `once=true` 且本房间已经成功使用过它，需要重载房间；频繁调试时可暂时设置 `once=false`。
 - 删除或写坏 TAS 不会破坏正在播放的旧快照，但下一次激活会失败并写入日志。
 
-### 外观配置热更新
+### NPC 配置热更新
 
 修改 `config/npcPlayer/npcPlayer.yaml` 后，npcPlayer 会使该地图模组的配置缓存失效：
 
 - 不需要完全重启 Celeste。
-- 已存在的 NPC 不会原地换皮肤。
+- 已存在的 NPC 不会原地更换皮肤或死亡连接。
 - 下一次房间加载、死亡重试，或离开后重新进入时应用新配置。
 - 不原地重建是为了保留当前坐标、持有物和 TAS 状态。
 
@@ -389,13 +406,15 @@ NPC 更新期间：
 
 ## 13. 死亡与重载
 
-设计目标是让真人和 NPC 属于同一条房间失败流程：
+死亡传导是以真人 Player 为中心的有向星型关系：
 
-- 真人死亡时，所有仍存活的 NPC 会进入死亡流程。
-- NPC 意外死亡时，会强制触发真人死亡。
-- 只记录一次真人死亡统计。
-- 只有真人死亡体负责最终屏幕擦除和房间重载，避免多个死亡体竞争 `Level.Reload()`。
-- NPC 死亡体是视觉伴随效果，不独立触发重载。
+- 真人死亡时，仅使 `lead_by_player` 为 `true` 的存活 NPC 进入死亡流程。
+- NPC 死亡时，仅在该 NPC 的 `lead_to_player` 为 `true` 时导致真人死亡。
+- NPC 杀死真人后，真人死亡只能继续传导到各自 `lead_by_player` 为 `true` 的其他 NPC；NPC 之间没有直接死亡连接。
+- `lead_to_player: false` 的 NPC 会独立死亡，并且当前房间生命周期内不会自动重生。
+- 只有真人死亡会记录统计并负责最终屏幕擦除和房间重载；NPC 死亡体完成视觉效果后不会独立重载房间。
+
+真人死亡并重载房间后，即使某个 NPC 的 `lead_by_player` 已关闭，它仍会根据出生点数据重新创建。关闭该连接只会阻止本次 NPC 死亡事件和死亡体，不会让运行时 NPC 跨房间重载保留。
 
 技术预览版仍应重点测试自定义皮肤、多个 NPC 同时死亡及第三方死亡钩子的组合。若视觉效果与预期不符，请同时提供皮肤名和 `log.txt`。
 
@@ -405,7 +424,7 @@ NPC 更新期间：
 
 检查：
 
-1. 地图模组是否依赖 `npcPlayer 0.2.0`。
+1. 地图模组是否依赖 `npcPlayer 0.2.1`。
 2. 是否放置了 `npcPlayer (Spawn Point)`。
 3. Lönn 中的实体 ID 是否仍为 `npcPlayer/npcPlayerSpawnPoint`。
 4. `log.txt` 是否出现重复 ID、皮肤配置或地图来源错误。
@@ -428,9 +447,9 @@ NPC 更新期间：
 
 正在播放的 TAS 不会中途替换。使用 `once=false` 的 Trigger 再次进入，或用另一个 Trigger 重新启动它；若原 Trigger 已以 `once=true` 成功使用，则先重载房间。地图模组必须是解压目录，ZIP 文件不会热更新。
 
-### 修改皮肤配置后外观没变
+### 修改 NPC 配置后行为没变
 
-配置只在创建 NPC 时应用。死亡重试、重新进入房间或以其他方式重新加载房间后再观察结果。
+外观和死亡连接只在创建 NPC 时应用。死亡重试、重新进入房间或以其他方式重新加载房间后再观察结果。
 
 ### NPC 不触发某个第三方实体
 

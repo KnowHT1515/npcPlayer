@@ -1,5 +1,5 @@
 - Name: npcPlayer
-  Version: 0.2.0
+  Version: 0.2.1
   Author: KnowHT
   DLL: Code/npcPlayer.dll
   Dependencies:

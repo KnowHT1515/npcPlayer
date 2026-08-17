@@ -125,7 +125,7 @@ internal static class NpcPlayerRegistry
         State(level).Players.Clear();
     }
 
-    public static List<NpcPlayerEntity> SnapshotLivePlayers(Level level)
+    public static List<NpcPlayerEntity> SnapshotPlayersLedByPlayer(Level level)
     {
         // Combine the explicit registry with Actor tracking. The registry is
         // authoritative during normal play; Actor tracking also recovers an
@@ -134,13 +134,13 @@ internal static class NpcPlayerRegistry
         HashSet<NpcPlayerEntity> players = new();
         foreach (NpcPlayerEntity npc in State(level).Players.Values)
         {
-            if (ReferenceEquals(npc.Scene, level) && !npc.Dead)
+            if (ReferenceEquals(npc.Scene, level) && !npc.Dead && npc.LeadByPlayer)
                 players.Add(npc);
         }
 
         foreach (Entity entity in level.Tracker.GetEntities<Actor>())
         {
-            if (entity is NpcPlayerEntity npc && ReferenceEquals(npc.Scene, level) && !npc.Dead)
+            if (entity is NpcPlayerEntity npc && ReferenceEquals(npc.Scene, level) && !npc.Dead && npc.LeadByPlayer)
                 players.Add(npc);
         }
 
@@ -165,9 +165,9 @@ internal static class NpcPlayerRegistry
         foreach (KeyValuePair<string, List<SpawnPoint>> pair in state.SpawnPoints)
         {
             SpawnPoint selected = SelectInitialSpawn(pair.Key, pair.Value);
-            string variant = NpcVariantConfig.Resolve(state.SourceMod, pair.Key);
-            PlayerSpriteMode mode = NpcSkinResolver.ResolveSpriteMode(variant);
-            level.Add(new NpcPlayerEntity(selected.Position, pair.Key, mode));
+            NpcPlayerConfig config = NpcPlayerConfigLoader.Resolve(state.SourceMod, pair.Key);
+            PlayerSpriteMode mode = NpcSkinResolver.ResolveSpriteMode(config.Variant);
+            level.Add(new NpcPlayerEntity(selected.Position, pair.Key, mode, config.DeathLink));
         }
     }
 
@@ -195,7 +195,7 @@ internal static class NpcPlayerRegistry
     public static void Clear()
     {
         byScene = new ConditionalWeakTable<Scene, RoomState>();
-        NpcVariantConfig.Clear();
+        NpcPlayerConfigLoader.Clear();
         NpcSkinResolver.Clear();
     }
 

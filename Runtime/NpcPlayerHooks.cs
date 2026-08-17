@@ -11,10 +11,13 @@ namespace Celeste.Mod.NpcPlayer.Runtime;
 
 internal static class NpcPlayerHooks
 {
+    private sealed class NpcDeathBodyState
+    {
+        public bool CleanupScheduled;
+    }
+
     private static bool loaded;
-    private static bool coordinatingDeath;
-    private static ConditionalWeakTable<PlayerDeadBody, object> visualNpcDeathBodies = new();
-    private static readonly object VisualNpcDeathBodyMarker = new();
+    private static ConditionalWeakTable<PlayerDeadBody, NpcDeathBodyState> npcDeathBodies = new();
     private static Hook? grabCheckHook;
     private static Hook? crouchDashPressedHook;
     private static Hook? musicUnderwaterHook;
@@ -71,7 +74,7 @@ internal static class NpcPlayerHooks
         musicUnderwaterHook?.Dispose();
         musicUnderwaterHook = null;
         PandorasBoxCompatibility.Unload();
-        visualNpcDeathBodies = new ConditionalWeakTable<PlayerDeadBody, object>();
+        npcDeathBodies = new ConditionalWeakTable<PlayerDeadBody, NpcDeathBodyState>();
     }
 
     private static void OnLoadLevel(On.Celeste.Level.orig_LoadLevel orig, Level self, Player.IntroTypes playerIntro, bool isFromLoader)
@@ -162,16 +165,17 @@ internal static class NpcPlayerHooks
         Level? level = self.Scene as Level;
         if (self is not NpcPlayerEntity npc)
         {
-            List<NpcPlayerEntity>? synchronizedNpcs = level is not null && !coordinatingDeath
-                ? NpcPlayerRegistry.SnapshotLivePlayers(level)
+            List<NpcPlayerEntity>? synchronizedNpcs = level is not null
+                ? NpcPlayerRegistry.SnapshotPlayersLedByPlayer(level)
                 : null;
             PlayerDeadBody? body = orig(self, direction, evenIfInvincible, registerDeathInStats);
             if (body is not null && level is not null && synchronizedNpcs is not null)
             {
                 Logger.Info(
                     "npcPlayer",
-                    $"Death sync: captured {synchronizedNpcs.Count} live npcPlayer instance(s) before the real Player died.");
-                KillNpcSnapshot(synchronizedNpcs, GetSynchronizedDeathDirection(direction));
+                    $"Death link: captured {synchronizedNpcs.Count} live npcPlayer instance(s) led by the real Player's death.");
+                if (synchronizedNpcs.Count > 0)
+                    KillNpcSnapshot(synchronizedNpcs, GetSynchronizedDeathDirection(direction));
             }
             return body;
         }
@@ -183,9 +187,13 @@ internal static class NpcPlayerHooks
         if (npcBody is null)
             return npcBody;
 
-        if (coordinatingDeath)
+        // An NPC body never owns the room reload. When no Player death follows,
+        // its completed visual effect is removed explicitly instead.
+        MarkNpcDeathBody(npcBody);
+
+        if (!npc.LeadToPlayer)
         {
-            MarkVisualNpcDeathBody(npcBody);
+            Logger.Info("npcPlayer", $"Death link: npcPlayer '{npc.NpcId}' died independently of the real Player.");
             return npcBody;
         }
 
@@ -193,14 +201,7 @@ internal static class NpcPlayerHooks
         if (realPlayer is null)
             return npcBody;
         if (realPlayer.Dead)
-        {
-            // A real-player death is already in flight. This NPC body belongs
-            // to that same reload even if another hook killed it slightly later.
-            MarkVisualNpcDeathBody(npcBody);
             return npcBody;
-        }
-
-        MarkVisualNpcDeathBody(npcBody);
 
         // Match TheoCrystal's ownership model: let the initiating entity finish
         // its own death call, then request an ordinary Player death outside the
@@ -212,40 +213,64 @@ internal static class NpcPlayerHooks
             if (realPlayer.Dead || !ReferenceEquals(realPlayer.Scene, level))
                 return;
 
-            coordinatingDeath = true;
-            try
+            Vector2 playerDeathDirection = GetSynchronizedDeathDirection(direction);
+            PlayerDeadBody? realBody = realPlayer.Die(playerDeathDirection, false, registerDeathInStats);
+            if (realBody is not null)
             {
-                Vector2 playerDeathDirection = GetSynchronizedDeathDirection(direction);
-                PlayerDeadBody? realBody = realPlayer.Die(playerDeathDirection, false, registerDeathInStats);
-                if (realBody is not null)
-                {
-                    Logger.Info("npcPlayer", $"Death sync: npcPlayer '{npc.NpcId}' created the real Player death body at end of frame.");
-                }
-                else
-                    Logger.Warn("npcPlayer", $"Death sync: npcPlayer '{npc.NpcId}' died, but the end-of-frame real Player death was rejected.");
+                Logger.Info("npcPlayer", $"Death link: npcPlayer '{npc.NpcId}' created the real Player death body at end of frame.");
             }
-            finally
-            {
-                coordinatingDeath = false;
-            }
+            else
+                Logger.Warn("npcPlayer", $"Death link: npcPlayer '{npc.NpcId}' died, but the end-of-frame real Player death was rejected.");
         };
         return npcBody;
     }
 
     private static void OnPlayerDeadBodyEnd(On.Celeste.PlayerDeadBody.orig_End orig, PlayerDeadBody self)
     {
-        // NPC bodies are visual companions to the real Player's body. Let the
-        // latter own the screen wipe and room reload so multiple bodies cannot
-        // race Level.Reload or count more than one death.
-        if (visualNpcDeathBodies.TryGetValue(self, out _))
+        // NPC bodies never own the screen wipe or room reload. Preserve the
+        // complete radial effect, then remove an independent body even when no
+        // real Player body exists to reload the room.
+        if (npcDeathBodies.TryGetValue(self, out NpcDeathBodyState? state))
+        {
+            ScheduleNpcDeathBodyCleanup(self, state);
             return;
+        }
         orig(self);
     }
 
-    private static void MarkVisualNpcDeathBody(PlayerDeadBody body)
+    private static void MarkNpcDeathBody(PlayerDeadBody body)
     {
-        if (!visualNpcDeathBodies.TryGetValue(body, out _))
-            visualNpcDeathBodies.Add(body, VisualNpcDeathBodyMarker);
+        if (!npcDeathBodies.TryGetValue(body, out _))
+            npcDeathBodies.Add(body, new NpcDeathBodyState());
+    }
+
+    private static void ScheduleNpcDeathBodyCleanup(PlayerDeadBody body, NpcDeathBodyState state)
+    {
+        if (state.CleanupScheduled)
+            return;
+        state.CleanupScheduled = true;
+
+        DeathEffect? deathEffect = body.Get<DeathEffect>();
+        if (deathEffect is null)
+        {
+            if (body.Scene is not null)
+                body.RemoveSelf();
+            return;
+        }
+
+        Action? previousOnEnd = deathEffect.OnEnd;
+        deathEffect.OnEnd = () =>
+        {
+            try
+            {
+                previousOnEnd?.Invoke();
+            }
+            finally
+            {
+                if (body.Scene is not null)
+                    body.RemoveSelf();
+            }
+        };
     }
 
     private static void KillNpcSnapshot(
@@ -255,44 +280,34 @@ internal static class NpcPlayerHooks
         // The snapshot was captured before the real Player's original death
         // path could mutate scene tracking. Dispatch immediately after that
         // path succeeds, while every captured NPC instance is still usable.
-        bool wasCoordinating = coordinatingDeath;
-        coordinatingDeath = true;
-        try
+        int killed = 0;
+        foreach (NpcPlayerEntity npc in synchronizedNpcs)
         {
-            int killed = 0;
-            foreach (NpcPlayerEntity npc in synchronizedNpcs)
+            if (npc.Dead || npc.Scene is null)
+                continue;
+
+            // Player-led propagation terminates here: linked NPCs use the
+            // original death implementation so they cannot lead back to the
+            // Player or establish a direct NPC-to-NPC death path.
+            PlayerDeadBody? npcBody = npc.orig_Die(direction, true, false);
+            if (npcBody is null)
             {
-                if (npc.Dead || npc.Scene is null)
-                    continue;
-
-                // A synchronized companion death must not re-enter the public
-                // Player.Die hook chain. Some compatibility hooks consume the
-                // nested call after the real Player is already dead and return
-                // no body, leaving the NPC visually alive.
-                PlayerDeadBody? npcBody = npc.orig_Die(direction, true, false);
-                if (npcBody is null)
-                {
-                    Logger.Warn(
-                        "npcPlayer",
-                        $"Death sync: original death rejected npcPlayer '{npc.NpcId}' " +
-                        $"(dead={npc.Dead}, state={npc.StateMachine.State}, scene={npc.Scene?.GetType().Name ?? "null"}).");
-                    continue;
-                }
-
-                MarkVisualNpcDeathBody(npcBody);
-                killed++;
-            }
-            if (killed == 0)
                 Logger.Warn(
                     "npcPlayer",
-                    $"Death sync: captured {synchronizedNpcs.Count} live npcPlayer instance(s), but no death body was created.");
-            else
-                Logger.Info("npcPlayer", $"Death sync: the real Player created {killed} npcPlayer death body/bodies.");
+                    $"Death link: original death rejected npcPlayer '{npc.NpcId}' " +
+                    $"(dead={npc.Dead}, state={npc.StateMachine.State}, scene={npc.Scene?.GetType().Name ?? "null"}).");
+                continue;
+            }
+
+            MarkNpcDeathBody(npcBody);
+            killed++;
         }
-        finally
-        {
-            coordinatingDeath = wasCoordinating;
-        }
+        if (killed == 0)
+            Logger.Warn(
+                "npcPlayer",
+                $"Death link: captured {synchronizedNpcs.Count} eligible npcPlayer instance(s), but no death body was created.");
+        else
+            Logger.Info("npcPlayer", $"Death link: the real Player created {killed} npcPlayer death body/bodies.");
     }
 
     private static Vector2 GetSynchronizedDeathDirection(Vector2 initiatingDirection)
