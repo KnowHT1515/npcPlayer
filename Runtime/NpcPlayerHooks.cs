@@ -44,6 +44,7 @@ internal static class NpcPlayerHooks
         On.Celeste.Solid.GetPlayerOnTop += OnSolidGetPlayerOnTop;
         On.Celeste.Solid.GetPlayerClimbing += OnSolidGetPlayerClimbing;
         On.Celeste.JumpThru.GetPlayerRider += OnJumpThruGetPlayerRider;
+        NpcAudioRouter.Load();
 
         grabCheckHook = HookInputGetter("GrabCheck", OnGrabCheck);
         crouchDashPressedHook = HookInputGetter("CrouchDashPressed", OnCrouchDashPressed);
@@ -67,6 +68,7 @@ internal static class NpcPlayerHooks
         On.Celeste.Solid.GetPlayerOnTop -= OnSolidGetPlayerOnTop;
         On.Celeste.Solid.GetPlayerClimbing -= OnSolidGetPlayerClimbing;
         On.Celeste.JumpThru.GetPlayerRider -= OnJumpThruGetPlayerRider;
+        NpcAudioRouter.Unload();
         grabCheckHook?.Dispose();
         grabCheckHook = null;
         crouchDashPressedHook?.Dispose();

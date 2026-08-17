@@ -19,9 +19,11 @@ Entity ID: `npcPlayer/npcPlayerSpawnPoint`
 - `npcId`: exact, case-sensitive logical NPC identity.
 - `default`: whether this point should be preferred as the initial respawn point for this `npcId` in this room.
 
-Lönn provides one placement named `npcPlayer (Spawn Point)`, rendered with `characters/player_badeline/sleep00`; newly placed points use `default=false`.
+Lönn provides one placement named `npcPlayer (Spawn Point)`, rendered with `characters/player_badeline/sleep00`; newly placed points leave `npcId` empty and use `default=false`.
 
 A room containing Spawn Points creates one runtime `npcPlayer` actor per unique `npcId`. For each ID, runtime uses the first `default=true` Spawn Point in map-data order. If none are marked default, it uses the first Spawn Point in map-data order. Multiple defaults are left unchanged and only the first is used.
+
+Every npcPlayer `npcId` field in Lönn offers a searchable list of IDs found on npcPlayer entities and triggers across the currently open map. The field remains editable, so a new or intentionally unmatched ID can still be entered.
 
 ### Activate npcPlayer
 
@@ -33,6 +35,10 @@ Trigger ID: `npcPlayer/activateNpcPlayer`
 - `playerOnly`: when true only the real Player activates it; when false both the real Player and npcPlayers can activate it.
 
 A successful activation interrupts any current TAS and starts the new file from frame one.
+
+Newly placed triggers leave `npcId` and `tas` empty so authors select or enter both values explicitly.
+
+For a map named `MapName.bin`, Lönn scans the current map mod for `Tas/**/MapName/*.tas` and offers matching files in a searchable, editable list. Paths are displayed with `\` on Windows but are stored in map data with portable `/` separators.
 
 ### Change npcPlayer Respawn
 
@@ -111,6 +117,7 @@ For live TAS and NPC-config editing, install the map mod as an unpacked director
 - Common Player physics and PlayerCollider interactions run through the original Player update.
 - PlayerCollider callbacks are filtered: vanilla hazards, springs, boosters, bumpers, feathers and refills work; collectibles, doors, story and progression objects ignore NPCs. Third-party entities must implement `INpcPlayerCollider` to opt in.
 - NPC updates cannot move the camera, change the global underwater music state, or produce controller rumble. PlayerDeadBody animation feedback runs later and is intentionally unaffected by this update-only suppression.
+- Spatial sound effects attributed to an npcPlayer play at full volume within 64 pixels of the real Player, then smoothly attenuate to silence at 320 pixels. Attached looping `SoundSource` components follow the distance continuously. One NPC retains its normal internal sound mix; crowd limits begin only when multiple npcPlayer owners are audible. Distinct NPCs share a total budget of 1.2 full-volume owners, concurrent owners playing one event share one full-volume event budget, and only the four closest owners for that event remain audible. Duplicate `Player.Play` calls for the same NPC, event and frame are muted; gain reductions apply immediately and recover smoothly as competitors end. Music, ambience, UI audio and the real Player are not modified.
 - Freeze calls made synchronously during NPC update are discarded. Global freezes still pause the scene and TAS cursor.
 - Real Player death runs the original death animation and radial `DeathEffect` only for live npcPlayers whose `lead_by_player` link is enabled.
 - An NPC whose `lead_to_player` link is enabled kills the real Player at end of frame. The Player then propagates death only to other NPCs whose `lead_by_player` link is enabled; NPCs never link directly to one another.
